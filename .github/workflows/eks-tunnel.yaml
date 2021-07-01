@@ -92,6 +92,10 @@ jobs:
             --spot \
             --node-private-networking
 
+      - name: Make sure the 'aws-node' DaemonSet exists but has no scheduled pods
+        run: |
+          [[ $(kubectl -n kube-system get ds/aws-node -o jsonpath='{.status.currentNumberScheduled}') == 0 ]]
+
       - name: Load cilium cli script in configmap
         run: |
           kubectl create configmap cilium-cli-test-script -n kube-system --from-file=in-cluster-test-script.sh=.github/in-cluster-test-scripts/eks-tunnel.sh
@@ -116,6 +120,12 @@ jobs:
           curl -sLO https://github.com/cilium/cilium-sysdump/releases/latest/download/cilium-sysdump.zip
           python cilium-sysdump.zip --output cilium-sysdump-out
         shell: bash {0} # Disable default fail-fast behaviour so that all commands run independently
+
+      - name: Uninstall and make sure the 'aws-node' DaemonSet blocking nodeSelector was removed
+        if: ${{ success() }}
+        run: |
+          cilium uninstall --wait
+          [[ ! $(kubectl -n kube-system get ds/aws-node -o jsonpath="{.spec.template.spec.nodeSelector['io\.cilium/aws-node-enabled']}") ]]
 
       - name: Clean up EKS
         if: ${{ always() }}
